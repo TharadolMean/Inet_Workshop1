@@ -1,0 +1,253 @@
+{
+  "info": {
+    "name": "Workshop_1 API",
+    "description": "รันตามลำดับ (Run collection) ได้เลย ต้องเปิด server (npm start) และ MongoDB ก่อน",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "adminEmail", "value": "admin@example.com" },
+    { "key": "adminPassword", "value": "admin1234" },
+    { "key": "userEmail", "value": "user1@example.com" },
+    { "key": "userPassword", "value": "user1234" }
+  ],
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "Login admin",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 login success', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "pm.test('has token', () => pm.expect(j.data.token).to.be.a('string'));",
+            "pm.collectionVariables.set('adminToken', j.data.token);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}" },
+            "url": "{{baseUrl}}/login"
+          }
+        },
+        {
+          "name": "Register user",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+            "// สร้าง email ไม่ซ้ำทุกครั้งที่รัน เพื่อให้รันซ้ำได้",
+            "pm.collectionVariables.set('registeredEmail', Date.now() + '-' + pm.collectionVariables.get('userEmail'));"
+          ] } }, { "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 registered', () => pm.response.to.have.status(201));",
+            "pm.test('not approved yet', () => pm.expect(pm.response.json().data.isApproved).to.eql(false));",
+            "pm.collectionVariables.set('userId', pm.response.json().data._id);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"User One\",\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}" },
+            "url": "{{baseUrl}}/register"
+          }
+        },
+        {
+          "name": "Login user (ยังไม่ approve -> 401)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 not approved', () => pm.response.to.have.status(401));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}" },
+            "url": "{{baseUrl}}/login"
+          }
+        },
+        {
+          "name": "Admin: list users รอ approve",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users?isApproved=false", "host": ["{{baseUrl}}"], "path": ["users"], "query": [{ "key": "isApproved", "value": "false" }] }
+          }
+        },
+        {
+          "name": "Admin: approve user",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 approved', () => pm.response.to.have.status(200));",
+            "pm.test('isApproved true', () => pm.expect(pm.response.json().data.isApproved).to.eql(true));"
+          ] } }],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/users/{{userId}}/approve"
+          }
+        },
+        {
+          "name": "Login user (approve แล้ว -> 200)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 login success', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('userToken', pm.response.json().data.token);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}" },
+            "url": "{{baseUrl}}/login"
+          }
+        },
+        {
+          "name": "User ทั่วไป approve ไม่ได้ (401)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 admin only', () => pm.response.to.have.status(401));"
+          ] } }],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "url": "{{baseUrl}}/users/{{userId}}/approve"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Products",
+      "item": [
+        {
+          "name": "Create product (stock 10)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('productId', pm.response.json().data._id);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Keyboard\",\n  \"description\": \"Mechanical keyboard\",\n  \"price\": 1500,\n  \"stock\": 10\n}" },
+            "url": "{{baseUrl}}/products"
+          }
+        },
+        {
+          "name": "Create product (ข้อมูลไม่ครบ -> 400)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"description\": \"no name and price\"\n}" },
+            "url": "{{baseUrl}}/products"
+          }
+        },
+        {
+          "name": "Get all products",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('data is array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }], "url": "{{baseUrl}}/products" }
+        },
+        {
+          "name": "Get product by id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('data is object', () => pm.expect(pm.response.json().data._id).to.eql(pm.collectionVariables.get('productId')));"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }], "url": "{{baseUrl}}/products/{{productId}}" }
+        },
+        {
+          "name": "Get product (ไม่พบ -> 400, data null)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400', () => pm.response.to.have.status(400));",
+            "pm.test('data null', () => pm.expect(pm.response.json().data).to.eql(null));"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }], "url": "{{baseUrl}}/products/000000000000000000000000" }
+        },
+        {
+          "name": "Update product",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('price updated', () => pm.expect(pm.response.json().data.price).to.eql(1800));"
+          ] } }],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"price\": 1800\n}" },
+            "url": "{{baseUrl}}/products/{{productId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Orders",
+      "item": [
+        {
+          "name": "Create order qty 4 (stock 10 -> 6)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 created', () => pm.response.to.have.status(201));",
+            "const d = pm.response.json().data;",
+            "pm.test('total = 4 * 1800', () => pm.expect(d.totalPrice).to.eql(7200));",
+            "pm.collectionVariables.set('orderId', d._id);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 4\n}" },
+            "url": "{{baseUrl}}/products/{{productId}}/orders"
+          }
+        },
+        {
+          "name": "Check stock ถูกหักเหลือ 6",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('stock = 6', () => pm.expect(pm.response.json().data.stock).to.eql(6));"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }], "url": "{{baseUrl}}/products/{{productId}}" }
+        },
+        {
+          "name": "Create order เกิน stock (qty 7 -> 400)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 exceeds stock', () => pm.response.to.have.status(400));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 7\n}" },
+            "url": "{{baseUrl}}/products/{{productId}}/orders"
+          }
+        },
+        {
+          "name": "Get orders of product",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('1 order', () => pm.expect(pm.response.json().data).to.have.lengthOf(1));"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }], "url": "{{baseUrl}}/products/{{productId}}/orders" }
+        },
+        {
+          "name": "Get all orders",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('data is array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }], "url": "{{baseUrl}}/orders" }
+        },
+        {
+          "name": "ไม่มี token (401)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401', () => pm.response.to.have.status(401));"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/orders" }
+        }
+      ]
+    },
+    {
+      "name": "4. Cleanup",
+      "item": [
+        {
+          "name": "Delete product",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 deleted', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }], "url": "{{baseUrl}}/products/{{productId}}" }
+        }
+      ]
+    }
+  ]
+}
