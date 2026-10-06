@@ -34,7 +34,7 @@ exports.login = async (req, res) => {
   const match = await bcrypt.compare(String(password), user.password);
   if (!match) return r.unauthorized(res, 'invalid email or password');
 
-  // TODO: ยังไม่ชัดเจนว่า user ที่ยังไม่ Approve ควรได้ status อะไร (ตอนนี้ใช้ 401)
+  // ยังไม่ชัดเจนว่า user ที่ยังไม่ Approve ควรได้ status อะไร (ตอนนี้ใช้ 401)
   if (!user.isApproved) return r.unauthorized(res, 'user is not approved');
 
   const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
